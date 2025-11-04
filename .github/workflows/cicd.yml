@@ -144,8 +144,30 @@ jobs:
             fi
 
             echo "Using compose command: $COMPOSE_CMD"
+            echo "Preparing docker-compose configuration (if missing)"
+            # compute image tag (same logic used in build step)
+            if [ -n "${{ secrets.ECR_REPO }}" ]; then
+              IMAGE="${{ secrets.ECR_REPO }}:latest"
+            else
+              IMAGE="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ secrets.REPOSITORY_NAME }}:latest"
+            fi
+
+            # If no compose file exists in the working directory, create a minimal one
+            if [ ! -f docker-compose.yml ] && [ ! -f docker-compose.yaml ] && [ ! -f compose.yml ] && [ ! -f compose.yaml ]; then
+              echo "No compose file found in the current directory. Writing minimal docker-compose.yml using image: $IMAGE"
+              echo "version: '3.8'" > docker-compose.yml
+              echo "services:" >> docker-compose.yml
+              echo "  app:" >> docker-compose.yml
+              echo "    image: $IMAGE" >> docker-compose.yml
+              echo "    ports:" >> docker-compose.yml
+              echo "      - \"80:80\"" >> docker-compose.yml
+              echo "    restart: always" >> docker-compose.yml
+            else
+              echo "Found docker compose configuration. Using existing file."
+            fi
+
             echo "Pulling images from registry"
-            $COMPOSE_CMD pull
+            $COMPOSE_CMD pull || true
             echo "Starting services"
             $COMPOSE_CMD up -d --force-recreate
             echo "Deploy completed successfully"
